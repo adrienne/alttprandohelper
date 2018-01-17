@@ -54,7 +54,43 @@
 
     var DungeonWithMedallion = WithMedallion(Dungeon);
 
-    var Chest = function(props) {
+    var WithBigKey = function(Wrapped) {
+        return function(props) {
+            var name = props.name,
+                dungeon = props.value;
+            return [
+                t(Wrapped, props),
+                div('.big-key', {
+                    className: classNames({ collected: dungeon.big_key }),
+                    onClick: function() { props.onBigKeyClick(name); }
+                })
+            ];
+        };
+    };
+
+    var DungeonWithBigkey = WithBigKey(Dungeon),
+        DungeonWithMedallionWithBigkey = WithBigKey(DungeonWithMedallion);
+
+    var Keys = function(props) {
+        var name = props.name,
+            source = props.value;
+        return !source.key_limit ?
+            div('.keys', span('\u2014')) :
+            div('.keys',
+                { onClick: function() { props.onClick(name); } },
+                span(source.keys+'/'+source.key_limit));
+    };
+
+    var SingleChest = function(props) {
+        var name = props.name,
+            dungeon = props.value;
+        return div('.chest', {
+                className: classNames({ empty: !dungeon.chests }),
+                onClick: function() { props.onClick(name); }
+            }, span(''+dungeon.chests));
+    }
+
+    var Chests = function(props) {
         var name = props.name,
             dungeon = props.value;
         return div('.chest', {
@@ -170,7 +206,50 @@
         },
 
         dungeon: function(name) {
-            return t(Chest, { name: name, value: this.props.dungeons[name], onClick: this.props.chest_click });
+            return t(Chests, { name: name, value: this.props.dungeons[name], onClick: this.props.chest_click });
+        }
+    }));
+
+    var KeysanityTracker = createReactClass(Object.assign({}, _tracker, {
+        dungeon_boss: function(name) {
+            return t(DungeonWithBigkey, {
+                name: name,
+                value: this.props.dungeons[name],
+                onBossClick: this.props.boss_click,
+                onPrizeClick: this.props.prize_click,
+                onBigKeyClick: this.props.big_key_click
+            });
+        },
+
+        medallion_dungeon_boss: function(name) {
+            return t(DungeonWithMedallionWithBigkey, {
+                name: name,
+                value: this.props.dungeons[name],
+                onBossClick: this.props.boss_click,
+                onPrizeClick: this.props.prize_click,
+                onMedallionClick: this.props.medallion_click,
+                onBigKeyClick: this.props.big_key_click
+            });
+        },
+
+        agahnim: function() {
+            var region_key_click = this.props.region_key_click;
+            return [
+                t(Item, {
+                    name: 'agahnim',
+                    value: this.props.encounters.agahnim.completed,
+                    onClick: this.props.encounter_click
+                }),
+                div('.agahnim-keys',
+                    t(Keys, { name: 'escape', value: this.props.regions.escape, onClick: region_key_click }),
+                    t(Keys, { name: 'castle_tower', value: this.props.regions.castle_tower, onClick: region_key_click }))
+            ];
+        },
+
+        dungeon: function(name) {
+            return div('.dungeon',
+                t(Keys, { name: name, value: this.props.dungeons[name], onClick: this.props.dungeon_key_click }),
+                t(SingleChest, { name: name, value: this.props.dungeons[name], onClick: this.props.chest_click }));
         }
     }));
 
@@ -345,14 +424,22 @@
         render: function() {
             var query = this.props.query;
             return div('#page', {
-                    className: classNames({ row: query.hmap, hmap: query.hmap, vmap: query.vmap }, query.sprite),
+                    className: classNames({
+                        row: query.hmap,
+                        hmap: query.hmap,
+                        vmap: query.vmap,
+                        keysanity: query.mode === 'keysanity'
+                    }, query.sprite),
                     style: query.bg && { 'background-color': query.bg }
                 },
-                t(Tracker, Object.assign({
+                t(query.mode === 'keysanity' ? KeysanityTracker : Tracker, Object.assign({
                     item_click: this.item_click,
                     boss_click: this.boss_click,
                     prize_click: this.prize_click,
                     medallion_click: this.medallion_click,
+                    big_key_click: this.big_key_click,
+                    dungeon_key_click: this.dungeon_key_click,
+                    region_key_click: this.region_key_click,
                     encounter_click: this.encounter_click,
                     chest_click: this.chest_click,
                     horizontal: query.hmap
@@ -380,6 +467,22 @@
         medallion_click: function(name) {
             var value = counter(this.state.dungeons[name].medallion, 1, 3);
             this.setState(update(this.state, { dungeons: at(name, { medallion: { $set: value } }) }));
+        },
+
+        big_key_click: function(name) {
+            this.setState(update(this.state, { dungeons: at(name, { $toggle: ['big_key'] }) }));
+        },
+
+        dungeon_key_click: function(name) {
+            var dungeon = this.state.dungeons[name],
+                value = counter(dungeon.keys, 1, dungeon.key_limit);
+            this.setState(update(this.state, { dungeons: at(name, { keys: { $set: value } }) }));
+        },
+
+        region_key_click: function(name) {
+            var region = this.state.regions[name],
+                value = counter(region.keys, 1, region.key_limit);
+            this.setState(update(this.state, { regions: at(name, { keys: { $set: value } }) }));
         },
 
         encounter_click: function(name) {
